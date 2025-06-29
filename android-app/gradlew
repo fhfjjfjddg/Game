@@ -1,0 +1,5770 @@
+#!/usr/bin/env sh
+
+#
+# Copyright 2015 the original author or authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass any JVM options to Gradle separately.
+DEFAULT_JVM_OPTS=""
+
+APP_NAME="Gradle"
+APP_BASE_NAME=`basename "$0"`
+
+# Use the maximum available, or set MAX_FD != -1 to use that value.
+MAX_FD="maximum"
+
+warn () {
+    echo "$*"
+}
+
+die () {
+    echo
+    echo "ERROR: $*"
+    echo
+    exit 1
+}
+
+# OS specific support (must be 'true' or 'false').
+cygwin=false
+msys=false
+darwin=false
+nonstop=false
+case "`uname`" in
+  CYGWIN* )
+    cygwin=true
+    ;;
+  Darwin* )
+    darwin=true
+    ;;
+  MINGW* )
+    msys=true
+    ;;
+  NONSTOP* )
+    nonstop=true
+    ;;
+esac
+
+# Attempt to set APP_HOME
+# Resolve links: $0 may be a link
+PRG="$0"
+# Need this for relative symlinks.
+while [ -h "$PRG" ] ; do
+    ls=`ls -ld "$PRG"`
+    link=`expr "$ls" : '.*-> \(.*\)$'`
+    if expr "$link" : '/.*' > /dev/null; then
+        PRG="$link"
+    else
+        PRG=`dirname "$PRG"`"/$link"
+    fi
+done
+
+APP_HOME=`dirname "$PRG"`
+
+# For Cygwin, ensure paths are in UNIX format before anything is touched
+if $cygwin ; then
+    [ -n "$APP_HOME" ] &&
+        APP_HOME=`cygpath --unix "$APP_HOME"`
+    [ -n "$JAVA_HOME" ] &&
+        JAVA_HOME=`cygpath --unix "$JAVA_HOME"`
+    [ -n "$CLASSPATH" ] &&
+        CLASSPATH=`cygpath --path --unix "$CLASSPATH"`
+fi
+
+# Attempt to find Java
+if [ -n "$JAVA_HOME" ] ; then
+    if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+        # IBM's JDK on AIX uses strange locations for the executables
+        JAVACMD="$JAVA_HOME/jre/sh/java"
+    else
+        JAVACMD="$JAVA_HOME/bin/java"
+    fi
+    if [ ! -x "$JAVACMD" ] ; then
+        die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+    fi
+else
+    JAVACMD="java"
+    which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+fi
+
+# Increase the maximum number of open file descriptors
+if ! $cygwin && ! $msys && ! $nonstop ; then
+    MAX_FD_LIMIT=`ulimit -H -n`
+    if [ $? -eq 0 ] ; then
+        if [ "$MAX_FD" = "maximum" -o "$MAX_FD" = "max" ] ; then
+            # Use the system limit
+            MAX_FD="$MAX_FD_LIMIT"
+        fi
+        ulimit -n $MAX_FD
+        if [ $? -ne 0 ] ; then
+            warn "Could not set maximum file descriptor limit: $MAX_FD"
+        fi
+    else
+        warn "Could not query maximum file descriptor limit: $MAX_FD_LIMIT"
+    fi
+fi
+
+# Add -d32, -d64, or -d<size> to the JAVA_OPTS if the user hasn't specified any of these
+JAVA_VERSION=$($JAVACMD -version 2>&1 | sed -n ';s/.* version "\(.*\)\.\(.*\)\..*".*/\1\2/p;')
+if [ "$JAVA_VERSION" -lt 18 ]; then
+    # It's a Java < 8 version.
+    # This logic is taken from the legacy Gradle 1.x wrapper scripts.
+    # It's not that important since this script requires Java 8+, but we'll keep it for a while.
+    if [ -z "`echo $DEFAULT_JVM_OPTS | grep "\-d"`" ]; then
+        # No explicit -d<size> specified.
+        # Check for 64-bit vs 32-bit.
+        # Add -d64 if 64-bit is detected.
+        if [ "`uname -m`" = "x86_64" ]; then
+            DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS -d64"
+        fi
+    fi
+fi
+
+# For Cygwin, switch paths to Windows format before running java
+if $cygwin ; then
+    APP_HOME=`cygpath --path --windows "$APP_HOME"`
+    JAVA_HOME=`cygpath --path --windows "$JAVA_HOME"`
+    CLASSPATH=`cygpath --path --windows "$CLASSPATH"`
+    CYGWIN_OPTS=`cygpath --path --windows "$CYGWIN_OPTS"`
+fi
+
+# Split up the JVM options passed to the wrapper
+# We need to do this to parse the options that are relevant to the wrapper script,
+# such as -Dgradle.user.home
+# We also need to quote each option in case it contains spaces.
+# This is taken from the Maven 2.2.1 `mvn` script.
+#
+# A slightly enhanced version of the Maven script's logic is used here.
+# It supports single-quoted options, which the Maven script does not.
+#
+# It does not support options that contain both single and double quotes.
+# Such options must be passed via GRADLE_OPTS or JAVA_OPTS.
+#
+# A simulated version of the `getopt` utility is used here,
+# because of the issues with running the `getopt` utility on different platforms,
+# and because of the white-space handling of the shell's `getopts` builtin.
+#
+# This simulated `getopt` is based on the `getopt` that is used by the `ant` script.
+#
+# `grabs` are the options that are to be grabbed by the script.
+# `pass` are the options that are to be passed to the Java command.
+#
+grabs=
+pass=
+# Store the arguments in a temporary array
+args=
+i=0
+for arg in "$@"
+do
+  args[$i]="$arg"
+  i=$((i+1))
+done
+# Now, iterate over the arguments, quoting each one.
+#
+i=0
+while [ $i -lt $# ]
+do
+  arg="${args[$i]}"
+  i=$((i+1))
+  # Handle options that are single-quoted
+  if echo "$arg" | grep "^'" > /dev/null
+  then
+    # This is a single-quoted option.
+    # It can be of the form:
+    #   '-Dfoo=bar'
+    #   '-Dfoo=bar baz'
+    #
+    # The following loop will find the closing quote.
+    #
+    # Note that this does not support options that contain a single quote.
+    #
+    tmpa="$arg"
+    while [ $i -lt $# ] && ! echo "$tmpa" | grep "'$" > /dev/null
+    do
+      tmpa="$tmpa ${args[$i]}"
+      i=$((i+1))
+    done
+    # Remove the quotes
+    tmpa=`echo "$tmpa" | sed "s/^'//"`
+    tmpa=`echo "$tmpa" | sed "s/'$//"`
+    # Add the option to the `pass` array
+    pass=("${pass[@]}" "$tmpa")
+    continue
+  fi
+  # Handle options that are double-quoted
+  if echo "$arg" | grep '^"' > /dev/null
+  then
+    # This is a double-quoted option.
+    # It can be of the form:
+    #   "-Dfoo=bar"
+    #   "-Dfoo=bar baz"
+    #
+    # The following loop will find the closing quote.
+    #
+    # Note that this does not support options that contain a double quote.
+    #
+    tmpa="$arg"
+    while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+    do
+      tmpa="$tmpa ${args[$i]}"
+      i=$((i+1))
+    done
+    # Remove the quotes
+    tmpa=`echo "$tmpa" | sed 's/^"//'`
+    tmpa=`echo "$tmpa" | sed 's/"$//'`
+    # Add the option to the `pass` array
+    pass=("${pass[@]}" "$tmpa")
+    continue
+  fi
+  # Handle options that are not quoted
+  case "$arg" in
+    -D* )
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # The following logic will handle the case where the value is quoted.
+      #
+      if echo "$arg" | grep "=" > /dev/null
+      then
+        # The value is specified in the same argument.
+        #
+        # It can be of the form:
+        #   -Dfoo=bar
+        #   -Dfoo="bar baz"
+        #
+        # We need to handle the case where the value is quoted.
+        #
+        # Note that this does not support values that contain a double quote.
+        #
+        # The following logic will find the closing quote, if any.
+        #
+        if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+        then
+          # The value is quoted and the closing quote is not in this argument.
+          #
+          # The following loop will find the closing quote.
+          #
+          tmpa="$arg"
+          while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+          do
+            tmpa="$tmpa ${args[$i]}"
+            i=$((i+1))
+          done
+          # Add the option to the `pass` array
+          pass=("${pass[@]}" "$tmpa")
+          continue
+        fi
+      else
+        # The value is specified in the next argument.
+        #
+        # It can be of the form:
+        #   -Dfoo bar
+        #   -Dfoo "bar baz"
+        #
+        # We need to handle the case where the value is quoted.
+        #
+        # Note that this does not support values that contain a double quote.
+        #
+        # The following logic will find the closing quote, if any.
+        #
+        if [ $i -lt $# ]
+        then
+          tmpa="${args[$i]}"
+          i=$((i+1))
+          if echo "$tmpa" | grep '^"' > /dev/null && ! echo "$tmpa" | grep '"$' > /dev/null
+          then
+            # The value is quoted and the closing quote is not in this argument.
+            #
+            # The following loop will find the closing quote.
+            #
+            while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+            do
+              tmpa="$tmpa ${args[$i]}"
+              i=$((i+1))
+            done
+          fi
+          # Add the option to the `pass` array
+          pass=("${pass[@]}" "$arg" "$tmpa")
+          continue
+        fi
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #
+      # Note that this does not support values that contain a double quote.
+      #
+      # The following logic will find the closing quote, if any.
+      #
+      if echo "$arg" | grep '="' > /dev/null && ! echo "$arg" | grep '"$' > /dev/null
+      then
+        # The value is quoted and the closing quote is not in this argument.
+        #
+        # The following loop will find the closing quote.
+        #
+        tmpa="$arg"
+        while [ $i -lt $# ] && ! echo "$tmpa" | grep '"$' > /dev/null
+        do
+          tmpa="$tmpa ${args[$i]}"
+          i=$((i+1))
+        done
+        # Add the option to the `pass` array
+        pass=("${pass[@]}" "$tmpa")
+        continue
+      fi
+      # This is a -D option.
+      # It can be of the form:
+      #   -Dfoo=bar
+      #   -Dfoo="bar baz"
+      #
+      # We need to handle the case where the value is quoted.
+      #

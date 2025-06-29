@@ -43,3 +43,13 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+
+# Android/Gradle
+.gradle/
+android-app/build/
+android-app/app/build/
+/android-app/local.properties
+/android-app/.idea/
+/android-app/app/release/
+/android-app/app/*.apk
+/android-app/app/*.aab
